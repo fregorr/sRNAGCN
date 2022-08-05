@@ -119,7 +119,7 @@ def main():
 
     input_list_size = 2000
 
-    gpu_nr = "cuda:1"
+    gpu_nr = "cuda:0"
     device = torch.device(gpu_nr if torch.cuda.is_available() else "cpu")
 
     conv_layer_type = "PNAConv"
