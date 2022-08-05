@@ -143,12 +143,15 @@ class PNAnet6L(torch.nn.Module):
 
         self.lin1 = Linear((128 * 8), 896)
         #self.lin1 = Linear(((128 * 2) + 1), 128)
-        self.dropout_lin1 = Dropout(p=dropout_lin_1)
+        if self.training == True:
+            self.dropout_lin1 = Dropout(p=dropout_lin_1)
         self.lin2 = Linear(896, 384)
-        self.dropout_lin2 = Dropout(p=dropout_lin_rest)
+        if self.training == True:
+            self.dropout_lin2 = Dropout(p=dropout_lin_rest)
         # Introduce IntaRNA energy in a later layer, to give it more importance.
         self.lin3 = Linear((384 + 1), 64)
-        self.dropout_lin3 = Dropout(p=dropout_lin_rest)
+        if self.training == True:
+            self.dropout_lin3 = Dropout(p=dropout_lin_rest)
         self.lin4 = Linear(64, 2)    # 2 Output channels for CrossEntropyLoss (for BCELossWithLogits it would be 1)
 
     def forward(self, x, edge_index, edge_attr, intarna_energy, batch, dropout_conv_1_2, dropout_conv_rest):
