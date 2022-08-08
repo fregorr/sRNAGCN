@@ -103,7 +103,6 @@ def main():
 
     given_train_val_split = False
 
-
     # Activation function:
     activation_funct = ReLU()
 
@@ -114,8 +113,11 @@ def main():
     weight_decay = 0.00001471
     dropout_conv_1_2 = 0.033686
     dropout_conv_rest = 0.001152
-    dropout_lin_1 = 0.297727
-    dropout_lin_rest = 0.011801
+    #dropout_lin_1 = 0.297727
+    #dropout_lin_rest = 0.011801
+
+    dropout_lin_1 = 0.5
+    dropout_lin_rest = 0.5
 
     input_list_size = 2000
 
@@ -126,7 +128,8 @@ def main():
     # pooling = "global_add (concatenation after each layer)"
     pooling = "global_mean + global_max (last layer)"
 
-    rooot = "/data_github/test_ril_seq/"
+    #rooot = "/data_github/test_ril_seq/"
+    rooot = "/data/test_ril_seq/"
 
     # Start:
 
