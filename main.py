@@ -96,6 +96,7 @@ def test(loader, dropout_conv_1_2, dropout_conv_rest, model, device):
 
 
 def main():
+    output_file = "output_for_vis_play_arounds_run_1_08_08_22.pkl"
     epochs = 101
     batch_size = 10
 
@@ -130,6 +131,8 @@ def main():
 
     #rooot = "/data_github/test_ril_seq/"
     rooot = "/data/test_ril_seq/"
+
+    param_dict = {}
 
     # Start:
 
@@ -244,6 +247,12 @@ def main():
               f"acc: {train_acc}, prec: {train_prec}, rec: {train_rec}, spec: {train_spec}, f1: {train_f1} \n"
               f"Validation: \n"
               f"acc: {val_acc}, prec: {val_prec}, rec: {val_rec}, spec: {val_spec}, f1: {val_f1}")
+    track_metrics = {"lmeans": lmeans,
+                     "param_dict": param_dict,
+                     "train_metrics": train_metrics,
+                     "val_metrics": val_metrics}
+    with open(output_file, "wb") as pickle_out:
+        rick.dump(track_metrics, pickle_out)
 
 
 if __name__ == "__main__":
