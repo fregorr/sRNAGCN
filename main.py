@@ -96,8 +96,8 @@ def test(loader, dropout_conv_1_2, dropout_conv_rest, model, device):
 
 
 def main():
-    output_file = "output_for_vis_play_arounds_run_1_08_08_22.pkl"
-    epochs = 101
+    output_file = "output_for_vis_play_arounds_run_4_08_08_22.pkl"
+    epochs = 201
     batch_size = 10
 
     max_graph_size = 550
@@ -111,9 +111,12 @@ def main():
 
     lr = 0.00005598
 
-    weight_decay = 0.00001471
-    dropout_conv_1_2 = 0.033686
-    dropout_conv_rest = 0.001152
+    #weight_decay = 0.00001471
+    weight_decay = 0.0001
+    #dropout_conv_1_2 = 0.033686
+    #dropout_conv_rest = 0.001152
+    dropout_conv_1_2 = 0
+    dropout_conv_rest = 0
     #dropout_lin_1 = 0.297727
     #dropout_lin_rest = 0.011801
 
@@ -122,7 +125,7 @@ def main():
 
     input_list_size = 2000
 
-    gpu_nr = "cuda:0"
+    gpu_nr = "cuda:2"
     device = torch.device(gpu_nr if torch.cuda.is_available() else "cpu")
 
     conv_layer_type = "PNAConv"
@@ -223,12 +226,18 @@ def main():
     criterion = torch.nn.CrossEntropyLoss(weight=weights)
 
     lmeans = []
-    lmins = []
-    val_maes = []
     train_accs = []
+    train_precs = []
+    train_recs = []
+    train_specs = []
+    train_f1s = []
     val_accs = []
-    train_metrics = []
-    val_metrics = []
+    val_precs = []
+    val_recs = []
+    val_specs = []
+    val_f1s = []
+    #train_metrics = []
+    #val_metrics = []
 
     for epoch in range(epochs):
         print(f"\n"
@@ -239,9 +248,18 @@ def main():
         train_acc, train_prec, train_rec, train_spec, train_f1 = test(train_loader, 0, 0, model, device)
         val_acc, val_prec, val_rec, val_spec, val_f1 = test(validation_loader, 0, 0, model, device)
         train_accs.append(train_acc)
+        train_precs.append(train_prec)
+        train_recs.append(train_rec)
+        train_specs.append(train_spec)
+        train_f1s.append(train_spec)
         val_accs.append(val_acc)
-        train_metrics.append([train_acc, train_prec, train_rec, train_spec, train_f1])
-        val_metrics.append([val_acc, val_prec, val_rec, val_spec, val_f1])
+        val_precs.append(val_prec)
+        val_recs.append(val_rec)
+        val_specs.append(val_spec)
+        val_f1s.append(val_spec)
+
+        #train_metrics.append([train_acc, train_prec, train_rec, train_spec, train_f1])
+        #val_metrics.append([val_acc, val_prec, val_rec, val_spec, val_f1])
         print(f"mean loss: {lmean} \n"
               f"Training: \n"
               f"acc: {train_acc}, prec: {train_prec}, rec: {train_rec}, spec: {train_spec}, f1: {train_f1} \n"
@@ -249,10 +267,20 @@ def main():
               f"acc: {val_acc}, prec: {val_prec}, rec: {val_rec}, spec: {val_spec}, f1: {val_f1}")
     track_metrics = {"lmeans": lmeans,
                      "param_dict": param_dict,
-                     "train_metrics": train_metrics,
-                     "val_metrics": val_metrics}
+                     "train_accs": train_accs,
+                     "train_precs": train_precs,
+                     "train_recs": train_recs,
+                     "train_specs": train_specs,
+                     "train_f1s": train_f1s,
+                     "val_accs": val_accs,
+                     "val_precs": val_precs,
+                     "val_recs": val_recs,
+                     "val_specs": val_specs,
+                     "val_f1s": val_f1s
+                     }
     with open(output_file, "wb") as pickle_out:
         rick.dump(track_metrics, pickle_out)
+    #return track_metrics
 
 
 if __name__ == "__main__":
