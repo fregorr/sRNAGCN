@@ -40,6 +40,7 @@ def visualize_metrics(file_name):
     ax3.set_xlabel("Epochs")
     ax3.set_ylim([0, 1.0])
 
+    # Legende
     leg = ax3.legend(loc="lower right")
     leg.get_lines()[0].set_linewidth(2)
     leg.get_lines()[1].set_linewidth(2)
@@ -70,11 +71,23 @@ def visualize_metrics(file_name):
     leg2.get_lines()[0].set_linewidth(2)
     leg2.get_lines()[1].set_linewidth(2)
 
-    # Legende
-
     fig3.suptitle(file_name, fontsize=10)
+
+    fig4, ax7 = plt.subplots(figsize=(5, 5), nrows=1, ncols=1)
+
+    ax7.plot(epochs, metrics_dict["train_aurpcs"], color="C1", linewidth=linewidth1, label="Training")
+    ax7.plot(epochs, metrics_dict["val_aurpcs"], color="C8", linewidth=linewidth1, label="Validation")
+    ax7.set_ylabel("area under the precision recall curve")
+    ax7.set_xlabel("epochs")
+    ax7.set_ylim([0, 1.0])
+
+    leg3 = ax7.legend(loc="lower right")
+    leg3.get_lines()[0].set_linewidth(2)
+    leg3.get_lines()[1].set_linewidth(2)
+
+    fig4.suptitle(file_name, fontsize=6)
 
     max_train_f1 = max(metrics_dict["train_f1s"])
     max_val_f1 = max(metrics_dict["val_f1s"])
 
-    return param_dict, max_train_f1, max_val_f1
+    return metrics_dict, param_dict, max_train_f1, max_val_f1
