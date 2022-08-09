@@ -6,6 +6,7 @@ import torch
 from torch.nn import ReLU
 from torch_geometric.loader import DataLoader
 from torch_geometric.utils import degree
+from sklearn.metrics import precision_recall_curve, auc
 
 
 # Helper scripts:
@@ -72,6 +73,7 @@ def metrics(preds, y):
 def test(loader, dropout_conv_1_2, dropout_conv_rest, model, device):
     model.eval()
     test_predictions = []
+    proba_positiv_prediction = []
     test_labels = []
     batches = 0
     # Iterate in batches over the training/test dataset.
@@ -90,13 +92,20 @@ def test(loader, dropout_conv_1_2, dropout_conv_rest, model, device):
             test_predictions = test_predictions + pred
             test_labels = test_labels + t_labels
             batches = batches + 1
-    # mae = calculate_mae(test_predictions, test_labels)
+            # additional area under the precision recall curve:
+            pred_probas = out.softmax(dim=1).detach().cpu()
+            proba_ones = pred_probas[:, 1].tolist()  # Only the probability of class one is needed for the AUPRC (softmax
+                                            # probabilities add up to 100 % so no information is lost...)
+            proba_positiv_prediction = proba_positiv_prediction + proba_ones
+        # mae = calculate_mae(test_predictions, test_labels)
     acc, prec, rec, spec, f1 = metrics(test_predictions, test_labels)
-    return acc, prec, rec, spec, f1
+    precision, recall, thresholds = precision_recall_curve(t_labels, proba_ones)
+    area_under_rpc = auc(recall, precision)
+    return acc, prec, rec, spec, f1, area_under_rpc
 
 
 def main():
-    output_file = "output_for_vis_play_arounds_run_4_08_08_22.pkl"
+    output_file = "output_for_vis_play_arounds_run_4_09_08_22.pkl"
     epochs = 201
     batch_size = 10
 
@@ -231,11 +240,14 @@ def main():
     train_recs = []
     train_specs = []
     train_f1s = []
+    train_aurpcs = []
     val_accs = []
     val_precs = []
     val_recs = []
     val_specs = []
     val_f1s = []
+    val_aurpcs = []
+
     #train_metrics = []
     #val_metrics = []
 
@@ -245,18 +257,20 @@ def main():
         lmean = train(train_loader, criterion, dropout_conv_1_2, dropout_conv_rest, model, device, optimizer)
         lmeans.append(lmean)
         # For evaluation, dropout is set to zero!:
-        train_acc, train_prec, train_rec, train_spec, train_f1 = test(train_loader, 0, 0, model, device)
-        val_acc, val_prec, val_rec, val_spec, val_f1 = test(validation_loader, 0, 0, model, device)
+        train_acc, train_prec, train_rec, train_spec, train_f1, train_aurpc = test(train_loader, 0, 0, model, device)
+        val_acc, val_prec, val_rec, val_spec, val_f1, val_aurpc = test(validation_loader, 0, 0, model, device)
         train_accs.append(train_acc)
         train_precs.append(train_prec)
         train_recs.append(train_rec)
         train_specs.append(train_spec)
-        train_f1s.append(train_spec)
+        train_f1s.append(train_f1)
+        train_aurpcs.append(train_aurpc)
         val_accs.append(val_acc)
         val_precs.append(val_prec)
         val_recs.append(val_rec)
         val_specs.append(val_spec)
-        val_f1s.append(val_spec)
+        val_f1s.append(val_f1)
+        val_aurpcs.append(val_aurpc)
 
         #train_metrics.append([train_acc, train_prec, train_rec, train_spec, train_f1])
         #val_metrics.append([val_acc, val_prec, val_rec, val_spec, val_f1])
@@ -272,11 +286,13 @@ def main():
                      "train_recs": train_recs,
                      "train_specs": train_specs,
                      "train_f1s": train_f1s,
+                     "train_aurpcs": train_aurpcs,
                      "val_accs": val_accs,
                      "val_precs": val_precs,
                      "val_recs": val_recs,
                      "val_specs": val_specs,
-                     "val_f1s": val_f1s
+                     "val_f1s": val_f1s,
+                     "val_aurpcs": val_aurpcs
                      }
     with open(output_file, "wb") as pickle_out:
         rick.dump(track_metrics, pickle_out)
