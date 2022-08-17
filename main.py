@@ -99,13 +99,62 @@ def test(loader, dropout_conv_1_2, dropout_conv_rest, model, device):
             proba_positiv_prediction = proba_positiv_prediction + proba_ones
         # mae = calculate_mae(test_predictions, test_labels)
     acc, prec, rec, spec, f1 = metrics(test_predictions, test_labels)
-    precision, recall, thresholds = precision_recall_curve(t_labels, proba_ones)
+    precision, recall, thresholds = precision_recall_curve(test_labels, proba_positiv_prediction)
     area_under_rpc = auc(recall, precision)
     return acc, prec, rec, spec, f1, area_under_rpc
 
 
+def load_trained_model(file_name_model_state, device, num_node_features, model_name=models.PNAnet4L):
+    checkpoint_dict = torch.load(file_name_model_state)
+    if "activation_funct" in checkpoint_dict:
+        activation_funct = checkpoint_dict["activation_funct"]
+    else:
+        activation_funct = ReLU()
+    deg = checkpoint_dict["deg"]
+    if "dropout_lin_1" in checkpoint_dict:
+        dropout_lin_1 = checkpoint_dict["dropout_lin_1"]
+    else:
+        dropout_lin_1 = 0.5
+    if "dropout_lin_rest" in checkpoint_dict:
+        dropout_lin_rest = checkpoint_dict["dropout_lin_rest"]
+    else:
+        dropout_lin_rest = 0.5
+    epoch = checkpoint_dict["epoch"]
+    model = model_name(dropout_lin_1, dropout_lin_rest, deg, num_node_features, activation_funct)
+    model.load_state_dict(checkpoint_dict["model_state_dict"])
+    model.to(device)
+    return model
+
+
+def stratified_train_val_test_split(dataset, train_proportion, val_proportion, test_proportion):
+    positive_idxs = [i for i, x in enumerate(dataset) if x.y == 1]
+    negative_idxs = [i for i, x in enumerate(dataset) if x.y == 0]
+    positive_idxs_train = positive_idxs[:round(len(positive_idxs) * train_proportion)]
+    negative_idxs_train = negative_idxs[:round(len(negative_idxs) * train_proportion)]
+    positive_idxs_val = positive_idxs[round(len(positive_idxs) * train_proportion):
+                                      (round(len(positive_idxs) * train_proportion) +
+                                       round(len(positive_idxs) * val_proportion))]
+    negative_idxs_val = negative_idxs[round(len(negative_idxs) * train_proportion):
+                                      (round(len(negative_idxs) * train_proportion) +
+                                      round(len(negative_idxs) * val_proportion))]
+    positive_idxs_test = positive_idxs[(round(len(positive_idxs) * train_proportion) +
+                                       round(len(positive_idxs) * val_proportion)):]
+    negative_idxs_test = negative_idxs[(round(len(negative_idxs) * train_proportion) +
+                                       round(len(negative_idxs) * val_proportion)):]
+    idxs_train = positive_idxs_train + negative_idxs_train
+    idxs_val = positive_idxs_val + negative_idxs_val
+    idxs_test = positive_idxs_test + negative_idxs_test
+    train_dataset = dataset[idxs_train]
+    validation_dataset = dataset[idxs_val]
+    test_dataset = dataset[idxs_test]
+    return train_dataset, validation_dataset, test_dataset
+
+
 def main():
-    output_file = "output_for_vis_play_arounds_run_4_09_08_22.pkl"
+    save_model_state = True
+    file_name_model_state = "/model_state_play_arounds_run_9_17_08_22.tar"
+
+    output_file = "output_for_vis_play_arounds_run_9_17_08_22.pkl"
     epochs = 201
     batch_size = 10
 
@@ -124,8 +173,8 @@ def main():
     weight_decay = 0.0001
     #dropout_conv_1_2 = 0.033686
     #dropout_conv_rest = 0.001152
-    dropout_conv_1_2 = 0
-    dropout_conv_rest = 0
+    dropout_conv_1_2 = 0.3
+    dropout_conv_rest = 0.3
     #dropout_lin_1 = 0.297727
     #dropout_lin_rest = 0.011801
 
@@ -142,7 +191,9 @@ def main():
     pooling = "global_mean + global_max (last layer)"
 
     #rooot = "/data_github/test_ril_seq/"
-    rooot = "/data/test_ril_seq/"
+    #rooot = "/data/test_ril_seq/"
+    #rooot = "/data/test_ril_seq_fixed_acc/"
+    rooot = "/data/test_ril_seq_16_08_22/"
 
     param_dict = {}
 
@@ -170,29 +221,34 @@ def main():
 
     # Splitting in train and validation data:
 
-    if given_train_val_split == True:  # Use, when validation data is prepared:
-        train_idxs = []
-        val_idxs = []
-        for ind, data in enumerate(dataset):
-            split = int(data.split)
-            if split == 0:
-                train_idxs.append(ind)
-            elif split == 1:
-                val_idxs.append(ind)
-        train_dataset = dataset[train_idxs]
-        validation_dataset = dataset[val_idxs]
+    #if given_train_val_split == True:  # Use, when validation data is prepared:
+    #    train_idxs = []
+    #    val_idxs = []
+    #    for ind, data in enumerate(dataset):
+    #        split = int(data.split)
+    #        if split == 0:
+    #            train_idxs.append(ind)
+    #        elif split == 1:
+    #            val_idxs.append(ind)
+    #    train_dataset = dataset[train_idxs]
+    #    validation_dataset = dataset[val_idxs]
     # elif given_train_val_split == False:
     #    where_to_slice = round(len(dataset) * 0.8)
     #    test_dataset = dataset[where_to_slice:data_size]   # Splitting off of test dataset
     #    where_to_slice_rest = round(where_to_slice * 0.8)   # splitting the rest in training and validation datasets
     #    train_dataset = dataset[:where_to_slice]
     #    validation_dataset = dataset[where_to_slice:]
-    elif given_train_val_split == False:
-        where_to_slice = round(len(dataset) * 0.8)
-        test_dataset = dataset[where_to_slice:]  # Splitting off of test dataset
-        where_to_slice_rest = round(where_to_slice * 0.8)  # splitting the rest in training and validation datasets
-        train_dataset = dataset[:where_to_slice_rest]
-        validation_dataset = dataset[where_to_slice_rest:where_to_slice]
+    #elif given_train_val_split == False:
+    #    where_to_slice = round(len(dataset) * 0.8)
+    #    test_dataset = dataset[where_to_slice:]  # Splitting off of test dataset
+    #    where_to_slice_rest = round(where_to_slice * 0.8)  # splitting the rest in training and validation datasets
+    #    train_dataset = dataset[:where_to_slice_rest]
+    #    validation_dataset = dataset[where_to_slice_rest:where_to_slice]
+
+    train_dataset, validation_dataset, test_dataset = stratified_train_val_test_split(dataset, train_proportion=0.7,
+                                                                                      val_proportion=0.15,
+                                                                                      test_proportion=0.15)
+
 
     print(f'Number of training graphs: {len(train_dataset)}')
     print(f'Number of validation graphs: {len(validation_dataset)}')
@@ -276,9 +332,9 @@ def main():
         #val_metrics.append([val_acc, val_prec, val_rec, val_spec, val_f1])
         print(f"mean loss: {lmean} \n"
               f"Training: \n"
-              f"acc: {train_acc}, prec: {train_prec}, rec: {train_rec}, spec: {train_spec}, f1: {train_f1} \n"
+              f"acc: {train_acc}, prec: {train_prec}, rec: {train_rec}, spec: {train_spec}, f1: {train_f1}, aurpc: {train_aurpc} \n"
               f"Validation: \n"
-              f"acc: {val_acc}, prec: {val_prec}, rec: {val_rec}, spec: {val_spec}, f1: {val_f1}")
+              f"acc: {val_acc}, prec: {val_prec}, rec: {val_rec}, spec: {val_spec}, f1: {val_f1}, aurpc: {val_aurpc}")
     track_metrics = {"lmeans": lmeans,
                      "param_dict": param_dict,
                      "train_accs": train_accs,
@@ -296,6 +352,19 @@ def main():
                      }
     with open(output_file, "wb") as pickle_out:
         rick.dump(track_metrics, pickle_out)
+    print(output_file)
+    if save_model_state:
+        path_model_state = path_to_here + file_name_model_state
+        # torch.save(model.state_dict(), path_model_state)
+        torch.save({"epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "deg": deg,
+                    "dropout_lin_1": dropout_lin_1,
+                    "dropout_lin_rest": dropout_lin_rest,
+                    "activation_funct": activation_funct
+                    }, path_model_state)
+
     #return track_metrics
 
 
