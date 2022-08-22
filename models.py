@@ -88,16 +88,18 @@ class PNAnet4L(torch.nn.Module):
 
         x = self.lin1(x)
         x = self.activation_funct(x)
-        x = self.dropout_lin1(x)
+        if self.training == True:
+            x = self.dropout_lin1(x)
         x = self.lin2(x)
         x = self.activation_funct(x)
-        x = self.dropout_lin2(x)
+        if self.training == True:
+            x = self.dropout_lin2(x)
         x = self.lin3(x)
         return x
 
 
 class PNAnet6L(torch.nn.Module):
-    def __init__(self, dropout_lin_1, dropout_lin_rest, deg, activation_funct):
+    def __init__(self, dropout_lin_1, dropout_lin_rest, deg, num_node_features, activation_funct):
         super().__init__()
 
         self.activation_funct = activation_funct
@@ -105,7 +107,7 @@ class PNAnet6L(torch.nn.Module):
         aggregators = ["mean", "min", "max", "std"]
         scalers = ["identity", "amplification", "attenuation"]
 
-        self.conv1 = PNAConv(in_channels=dataset.num_node_features, out_channels=128,
+        self.conv1 = PNAConv(in_channels=num_node_features, out_channels=128,
                              aggregators=aggregators, scalers=scalers, deg=deg,
                              edge_dim=4, towers=1, pre_layers=1, post_layers=1,
                              divide_input=False)
@@ -143,15 +145,12 @@ class PNAnet6L(torch.nn.Module):
 
         self.lin1 = Linear((128 * 8), 896)
         #self.lin1 = Linear(((128 * 2) + 1), 128)
-        if self.training == True:
-            self.dropout_lin1 = Dropout(p=dropout_lin_1)
+        self.dropout_lin1 = Dropout(p=dropout_lin_1)
         self.lin2 = Linear(896, 384)
-        if self.training == True:
-            self.dropout_lin2 = Dropout(p=dropout_lin_rest)
+        self.dropout_lin2 = Dropout(p=dropout_lin_rest)
         # Introduce IntaRNA energy in a later layer, to give it more importance.
-        self.lin3 = Linear((384 + 1), 64)
-        if self.training == True:
-            self.dropout_lin3 = Dropout(p=dropout_lin_rest)
+        self.lin3 = Linear(384, 64)  # + 1 if IntaRNA energy
+        self.dropout_lin3 = Dropout(p=dropout_lin_rest)
         self.lin4 = Linear(64, 2)    # 2 Output channels for CrossEntropyLoss (for BCELossWithLogits it would be 1)
 
     def forward(self, x, edge_index, edge_attr, intarna_energy, batch, dropout_conv_1_2, dropout_conv_rest):
@@ -218,15 +217,114 @@ class PNAnet6L(torch.nn.Module):
 
         x = self.lin1(x)
         x = self.activation_funct(x)
-        x = self.dropout_lin1(x)
+        if self.training == True:
+            x = self.dropout_lin1(x)
         x = self.lin2(x)
         x = self.activation_funct(x)
-        x = self.dropout_lin2(x)
+        if self.training == True:
+            x = self.dropout_lin2(x)
 
-        x = torch.cat([x, en], dim=1)
+        #x = torch.cat([x, en], dim=1)
 
         x = self.lin3(x)
         x = self.activation_funct(x)
-        x = self.dropout_lin3(x)
+        if self.training == True:
+            x = self.dropout_lin3(x)
         x = self.lin4(x)
         return x
+
+class PNAnet4Lb(torch.nn.Module):
+    def __init__(self, dropout_lin_1, dropout_lin_rest, deg, num_node_features, activation_funct):
+        super().__init__()
+
+        self.activation_funct = activation_funct
+
+        aggregators = ["mean", "min", "max", "std"]
+        scalers = ["identity", "amplification", "attenuation"]
+
+        self.conv1 = PNAConv(in_channels=num_node_features, out_channels=128,
+                             aggregators=aggregators, scalers=scalers, deg=deg,
+                             edge_dim=4, towers=1, pre_layers=1, post_layers=1,
+                             divide_input=False)
+        self.batch_norm1 = BatchNorm(128)
+
+        self.conv2 = PNAConv(in_channels=128, out_channels=128,
+                             aggregators=aggregators, scalers=scalers, deg=deg,
+                             edge_dim=4, towers=1, pre_layers=1, post_layers=1,
+                             divide_input=False)
+        self.batch_norm2 = BatchNorm(128)
+
+        self.conv3 = PNAConv(in_channels=128, out_channels=128,
+                             aggregators=aggregators, scalers=scalers, deg=deg,
+                             edge_dim=4, towers=1, pre_layers=1, post_layers=1,
+                             divide_input=False)
+        self.batch_norm3 = BatchNorm(128)
+
+        self.conv4 = PNAConv(in_channels=128, out_channels=128,
+                             aggregators=aggregators, scalers=scalers, deg=deg,
+                             edge_dim=4, towers=1, pre_layers=1, post_layers=1,
+                             divide_input=False)
+        self.batch_norm4 = BatchNorm(128)
+
+        self.lin1 = Linear((128 * 2), 128)
+        self.dropout_lin1 = Dropout(p=dropout_lin_1)
+        self.lin2 = Linear(128, 64)
+        self.dropout_lin2 = Dropout(p=dropout_lin_rest)
+        self.lin3 = Linear(64, 2)  # 2 Output channels for CrossEntropyLoss (for BCELossWithLogits it would be 1)
+
+    def forward(self, x, edge_index, edge_attr, intarna_energy, batch, dropout_conv_1_2, dropout_conv_rest):
+        # Convolutions:
+
+        # get the indices of all covalent edges: (edge attributes = [1, 0, 0, ..])
+        covalent_edges = [i for i, x in enumerate(edge_attr) if x[0] == 1]
+        non_covalent_edges = [i for i, x in enumerate(edge_attr) if x[0] != 1]
+
+        edge_index_covalent = torch.stack((edge_index[0][covalent_edges], edge_index[1][covalent_edges]),
+                                          dim=0)
+        edge_index_non_covalent = torch.stack((edge_index[0][non_covalent_edges], edge_index[1][non_covalent_edges]),
+                                              dim=0)
+
+        edge_attr_covalent = edge_attr[covalent_edges]
+        edge_attr_non_covalent = edge_attr[non_covalent_edges]
+
+        # Edge dropout with the same edges for all layers (not layer-wise):
+        dropped_edge_index_1, dropped_edge_attr_1 = dropout_adj(edge_index=edge_index_non_covalent,
+                                                                edge_attr=edge_attr_non_covalent,
+                                                                p=dropout_conv_1_2, force_undirected=True)
+        edge_index = torch.cat((edge_index_covalent, dropped_edge_index_1), dim=-1)
+        edge_attr = torch.cat((edge_attr_covalent, dropped_edge_attr_1), dim=0)
+
+        x = self.conv1(x, edge_index, edge_attr)
+        x = self.batch_norm1(x)
+        x = self.activation_funct(x)
+
+        x = self.conv2(x, edge_index, edge_attr)
+        x = self.batch_norm2(x)
+        x = self.activation_funct(x)
+
+         x = self.conv3(x, edge_index, edge_attr)
+        x = self.batch_norm3(x)
+        x = self.activation_funct(x)
+
+        x = self.conv4(x, edge_index, edge_attr)
+        x = self.batch_norm4(x)
+        x = self.activation_funct(x)
+
+        x4a = global_max_pool(x, batch)
+        x4b = global_mean_pool(x, batch)
+
+        # Linears:
+
+        x = torch.cat([x4a, x4b], dim=1)
+
+        x = self.lin1(x)
+        x = self.activation_funct(x)
+        if self.training == True:
+            x = self.dropout_lin1(x)
+        x = self.lin2(x)
+        x = self.activation_funct(x)
+        if self.training == True:
+            x = self.dropout_lin2(x)
+        x = self.lin3(x)
+        return x
+
