@@ -67,6 +67,7 @@ class MyDataset(Dataset):
                     label_tensor = torch.tensor([label], dtype=torch.long)  # Long for Classification
                     intarna_energy = entry[4]
                     intarna_energy_tensor = torch.tensor([intarna_energy])
+                    covalent_edges = (edge_attr[:, 0] == 1)
                     #if entry[5] == "train":
                     #    split = torch.tensor([0])
                     #elif entry[5] == "val":
@@ -76,7 +77,8 @@ class MyDataset(Dataset):
                                       edge_index=edge_index,
                                       edge_attr=edge_attr,
                                       y=label_tensor,
-                                      intarna_energy=intarna_energy_tensor
+                                      intarna_energy=intarna_energy_tensor,
+                                      covalent_edges=covalent_edges
                                       )
                     torch.save(data_entry,
                                osp.join(self.processed_dir,
@@ -102,6 +104,7 @@ class MyDataset(Dataset):
 def read_file(file_name, sheet_name):
     df = pd.read_excel(file_name, sheet_name=sheet_name, header=[1])
     return df
+
 
 def read_genome(file_name):
     with open(file_name) as file:
@@ -366,7 +369,9 @@ def build_graphs_on_the_fly_old(rna_1_seq, rna_2_seq, rna_1_name, rna_2_name, ex
 
 
 # The switch-up of UTR (= rna_1) and sRNA (=rna_2) for some of the functions is fixed!
-def build_graphs_on_the_fly(rna_1_seq, rna_2_seq, rna_1_name, rna_2_name, exceptions, label, intarna_accessibility=False):
+def build_graphs_on_the_fly(rna_1_seq, rna_2_seq, rna_1_name, rna_2_name, exceptions, label,
+                            intarna_accessibility=False, remove_weak_edges=True):
+    edge_weight_threshold = 0.05
     no_favorable_interaction = False
     entry_list = []
     output_file = "intarna_spotprob.csv"
@@ -390,6 +395,15 @@ def build_graphs_on_the_fly(rna_1_seq, rna_2_seq, rna_1_name, rna_2_name, except
             edge_index, edge_attributes = plfold_target_in(plfold_mrna, edge_index, edge_attributes)
             edge_index, edge_attributes = plfold_query_in(rna_1_seq, plfold_srna, edge_index, edge_attributes)
             edge_index, edge_attributes = intarna_in(edge_index, edge_attributes, output_file)
+            if remove_weak_edges:
+                edge_index_keep = []
+                edge_attributes_keep = []
+                for i, attr in enumerate(edge_attributes):
+                    if attr[3] >= edge_weight_threshold:
+                        edge_attributes_keep.append(attr)
+                        edge_index_keep.append(edge_index[i])
+                edge_index = edge_index_keep
+                edge_attributes = edge_attributes_keep
             entry_list.append(feature_vector)
             entry_list.append(edge_index)
             entry_list.append(edge_attributes)
@@ -408,12 +422,15 @@ def build_graphs_on_the_fly(rna_1_seq, rna_2_seq, rna_1_name, rna_2_name, except
 
 
 def prepare_ril_seq_melamed(number_of_samples="all_positives", fraction_positives=1, fraction_negatives=100):
-    genome_file = "data/e_coli_k12_mg1655_genome.fasta"
+    # genome_file = "data/e_coli_k12_mg1655_genome.fasta"  # This is Version 3 of the genome! In the RIL-seq paper from
+    # 2016, genome version 2 was used!!!
+    # Version 2:
+    genome_file = "data/e_coli_k12_mg1655_genome_NC_000913_2.fasta"
     ril_seq_file = "data/ril_seq_dataset_melamed_et_al_2016.xlsx"
 
-    base_name_pickle_output_lists = "data/test_ril_seq_16_08_22/raw/ril_seq_melamed_gnn_nested_input_list_"
+    base_name_pickle_output_lists = "data/test_ril_seq_23_08_22/raw/ril_seq_melamed_gnn_nested_input_list_"
                                     # (rest of file names is added for each list)
-    file_name_no_fav_intarna_interaction = "data/test_ril_seq_16_08_22/no_favorable_interaction_ril_seq_melamed_16_08_22.pkl"
+    file_name_no_fav_intarna_interaction = "data/test_ril_seq_23_08_22/no_favorable_interaction_ril_seq_melamed_16_08_22.pkl"
     pickle_list_size = 2000
 
     genome = read_genome(genome_file)
@@ -532,7 +549,8 @@ def prepare_ril_seq_melamed(number_of_samples="all_positives", fraction_positive
         label = row["label"]
         entry_list, exceptions, no_favorable_interaction = build_graphs_on_the_fly(rna_1_seq, rna_2_seq, rna_1_name,
                                                                                    rna_2_name, exceptions, label,
-                                                                                   intarna_accessibility=False)
+                                                                                   intarna_accessibility=False,
+                                                                                   remove_weak_edges=True)
         if no_favorable_interaction:
             pickle_out = open(file_name_no_fav_intarna_interaction, "a+b")
             rick.dump(entry_list, pickle_out)
