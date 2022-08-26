@@ -22,7 +22,7 @@ def train(train_loader, criterion, dropout_conv_1_2, dropout_conv_rest, model, d
         batch_nr = batch_nr + 1
         batch.to(device)
         optimizer.zero_grad()
-        out = model(batch.x, batch.edge_index, batch.edge_attr, batch.intarna_energy, batch.batch,
+        out = model(batch.x, batch.edge_index, batch.edge_attr, batch.intarna_energy, batch.batch, batch.covalent_edges,
                     dropout_conv_1_2, dropout_conv_rest)
         loss = criterion(out, batch.y)   # for CrossEntropyLoss
         loss.backward()
@@ -81,7 +81,7 @@ def test(loader, dropout_conv_1_2, dropout_conv_rest, model, device):
         for batch in loader:
             batch.to(device)
             out = model(batch.x, batch.edge_index, batch.edge_attr, batch.intarna_energy, batch.batch,
-                        dropout_conv_1_2, dropout_conv_rest)
+                        batch.covalent_edges, dropout_conv_1_2, dropout_conv_rest)
             pred = out.detach()
             pred = pred.argmax(dim=1)
             pred = pred.squeeze()
@@ -152,9 +152,9 @@ def stratified_train_val_test_split(dataset, train_proportion, val_proportion, t
 
 def main():
     save_model_state = True
-    file_name_model_state = "/model_state_play_arounds_run_9_17_08_22.tar"
+    file_name_model_state = "/model_state_play_arounds_run_24_23_08_22.tar"
 
-    output_file = "output_for_vis_play_arounds_run_9_17_08_22.pkl"
+    output_file = "output_for_vis_play_arounds_run_24_23_08_22.pkl"
     epochs = 201
     batch_size = 10
 
@@ -168,9 +168,10 @@ def main():
     # Optimizer:
 
     lr = 0.00005598
+    #lr = 0.0001
 
-    #weight_decay = 0.00001471
-    weight_decay = 0.0001
+    weight_decay = 0.00001471
+    #weight_decay = 0.0001
     #dropout_conv_1_2 = 0.033686
     #dropout_conv_rest = 0.001152
     dropout_conv_1_2 = 0.3
@@ -183,7 +184,7 @@ def main():
 
     input_list_size = 2000
 
-    gpu_nr = "cuda:2"
+    gpu_nr = "cuda:1"
     device = torch.device(gpu_nr if torch.cuda.is_available() else "cpu")
 
     conv_layer_type = "PNAConv"
@@ -193,7 +194,12 @@ def main():
     #rooot = "/data_github/test_ril_seq/"
     #rooot = "/data/test_ril_seq/"
     #rooot = "/data/test_ril_seq_fixed_acc/"
-    rooot = "/data/test_ril_seq_16_08_22/"
+    #rooot = "/data/test_ril_seq_17_08_22/"
+    #rooot = "/data/test_ril_seq_all_17_08_22/"
+    #rooot = "/data/test_ril_seq_18_08_22/"
+    #rooot = "/data/test_ril_seq_all_18_08_22/"
+    #rooot = "/data/test_test_23_08_22/"
+    rooot = "/data/test_ril_seq_23_08_22/"
 
     param_dict = {}
 
@@ -273,7 +279,7 @@ def main():
         d = degree(data.edge_index[1], num_nodes=data.num_nodes, dtype=torch.long)
         deg += torch.bincount(d, minlength=deg.numel())
 
-    model = models.PNAnet4L(dropout_lin_1, dropout_lin_rest, deg, dataset.num_node_features, activation_funct)
+    model = models.PNAnet4Lb(dropout_lin_1, dropout_lin_rest, deg, dataset.num_node_features, activation_funct)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
